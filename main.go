@@ -9,27 +9,29 @@ import (
 	"time"
 )
 
-func TestEndpoint(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(200)
-	w.Write([]byte("Testing 1 2 3 ..."))
-}
-
-type Product struct {
+type Participant struct {
 	gorm.Model
-	Code  string
-	Price uint
+	ID   uint   `gorm:"primary_key"`
+	Name string `gorm:"unique"`
 }
 
-type Star struct {
-	ID          uint
-	Name        string `gorm:"unique"`
-	Description string
-	URL         string
+type Issue struct {
+	gorm.Model
+	ID   uint   `gorm:"primary_key"`
+	Name string `gorm:"unique"`
+}
+
+type ParticipantIssueRating struct {
+	gorm.Model
+	ParticipantID uint `gorm:"primaryKey;autoIncrement:false"`
+	Participant   Participant
+	IssueID       uint `gorm:"primaryKey;autoIncrement:false"`
+	Issue         Issue
+	Value         float32
 }
 
 type App struct {
-
-	DB *gorm.DB
+	DB     *gorm.DB
 	Router *mux.Router
 }
 
@@ -45,7 +47,7 @@ func (a *App) Initialize(dbURI string) {
 	a.Router = mux.NewRouter()
 
 	//Migrate the schema
-	DB.AutoMigrate(&Product{}, &Star{})
+	DB.Debug().AutoMigrate(&Participant{}, &Issue{}, &ParticipantIssueRating{})
 
 }
 
@@ -55,11 +57,27 @@ func main() {
 	a.Initialize(":memory:")
 	//a.Initialize("test.db")
 
-	a.DB.Create(&Star{Name: "vb"})
-	a.DB.Create(&Star{Name: "vb2"})
-
-
-
+	participant := Participant{Name: "vinay"}
+	a.DB.Debug().Create(&participant)
+	issue := Issue{Name: "ducks in the pool"}
+	a.DB.Debug().Create(&issue)
+	issue2 := Issue{Name: "pigs in the garage"}
+	a.DB.Debug().Create(&issue2)
+	a.DB.Debug().Create(&ParticipantIssueRating{
+		Participant: participant,
+		Issue:       issue,
+		Value:       1.4,
+	})
+	a.DB.Debug().Create(&ParticipantIssueRating{
+		Participant: participant,
+		Issue:       issue2,
+		Value:       5,
+	})
+	//a.DB.Debug().Create(&ParticipantIssueRating{
+	//	Participant: participant,
+	//	Issue:       issue2,
+	//	Value:       5,
+	//})
 
 	r := a.Router
 
@@ -68,7 +86,6 @@ func main() {
 	r.HandleFunc("/bye", byeRouter)
 	http.Handle("/", r)
 	http.ListenAndServe(":8080", nil)
-
 
 	defer cleanDB(a.DB)
 
@@ -79,11 +96,11 @@ func byeRouter(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (a *App)  defaultRouter(w http.ResponseWriter, r *http.Request) {
-	var star Star
-	a.DB.First(&star, "name = ?", "vb")
+func (a *App) defaultRouter(w http.ResponseWriter, r *http.Request) {
+	var participant Participant
+	a.DB.First(&participant, "name = ?", "vinay")
 	fmt.Fprintf(w, "Hi")
-	w.Write([]byte(star.Name))
+	//w.Write([]byte(star.Name))
 }
 
 //TODO: defer not the best approach here, . use shutdown hooks
@@ -91,5 +108,5 @@ func cleanDB(DB *gorm.DB) {
 	db, _ := DB.DB()
 	db.Close()
 	println("Cleaned up DB")
-	time.Sleep(time.Duration(time.Second*5))
+	time.Sleep(time.Duration(time.Second * 5))
 }
